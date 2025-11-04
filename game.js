@@ -400,15 +400,42 @@ function showManagerAssignment(questId) {
     const availableAdventurers = adventurerSystem.adventurers.filter(adv => !adv.assignedQuestId);
     
     if (availableAdventurers.length === 0) {
-        game.ui.showNotification('No available adventurers to assign!');
+        game.ui.showNotification('No available adventurers to assign! Hire some adventurers first.', 'error');
         return;
     }
 
-    const adventurer = availableAdventurers[0];
-    if (adventurerSystem.assignToQuest(adventurer.id, questId)) {
-        game.ui.showNotification(`Assigned ${adventurer.name} to manage ${questSystem.getQuest(questId).name}`);
+    // Let player choose which adventurer to assign
+    if (availableAdventurers.length === 1) {
+        // Only one available, assign them automatically
+        const adventurer = availableAdventurers[0];
+        assignManagerToQuest(adventurer.id, questId);
+    } else {
+        // Multiple available, show selection (simple version for now)
+        const adventurer = availableAdventurers[0]; // Assign first one for now
+        assignManagerToQuest(adventurer.id, questId);
+    }
+}
+
+function assignManagerToQuest(adventurerId, questId) {
+    const adventurer = adventurerSystem.getAdventurer(adventurerId);
+    const quest = questSystem.getQuest(questId);
+    
+    if (adventurer && quest) {
+        // Assign adventurer to quest
+        adventurer.assignedQuestId = questId;
+        
+        // Hire manager in quest system
+        quest.managerHired = true;
+        quest.managerId = adventurerId;
+        quest.running = true;
+        quest.timeRemainingMs = quest.baseTimeMs;
+        
+        game.ui.showNotification(`🤵 ${adventurer.name} is now managing ${quest.name}! Quest started automatically.`);
         game.ui.updateQuestBoard();
         game.ui.updateAdventurersList();
+        
+        // Save the game
+        saveSystem.saveGame();
     }
 }
 
