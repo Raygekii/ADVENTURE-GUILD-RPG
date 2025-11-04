@@ -3,7 +3,6 @@ class GameEngine {
     constructor() {
         this.isRunning = false;
         this.lastUpdateTime = 0;
-        this.lastSaveTime = 0;
         this.gameState = null;
         this.ui = new GameUI();
     }
@@ -12,14 +11,8 @@ class GameEngine {
     initialize() {
         console.log('Initializing Guild Master RPG...');
         
-        // Load game state
+        // Load game state - always fresh start
         this.gameState = saveSystem.initializeGame();
-        
-        // Apply offline earnings
-        const offlineEarnings = saveSystem.applyOfflineEarnings();
-        if (offlineEarnings > 0) {
-            this.ui.showNotification(`Welcome back! You earned ${offlineEarnings} gold while away.`);
-        }
         
         // Initialize UI
         this.ui.initialize();
@@ -37,7 +30,6 @@ class GameEngine {
     startGameLoop() {
         this.isRunning = true;
         this.lastUpdateTime = Date.now();
-        this.lastSaveTime = Date.now();
         this.gameLoop();
     }
 
@@ -49,7 +41,7 @@ class GameEngine {
         const deltaTime = currentTime - this.lastUpdateTime;
         
         // Update game systems
-        this.update(deltaTime, currentTime);
+        this.update(deltaTime);
         
         // Update UI
         this.ui.update();
@@ -61,40 +53,25 @@ class GameEngine {
     }
 
     // Update game state
-    update(deltaTime, currentTime) {
+    update(deltaTime) {
         // Apply time scaling
         const scaledDeltaTime = deltaTime * (this.gameState?.time?.timeScale || 1);
         
-        // Update quest timers
+        // Update quest timers ONLY
         if (typeof questSystem !== 'undefined') {
             questSystem.updateQuestTimers(scaledDeltaTime);
-        }
-        
-        // Auto-save every 30 seconds
-        if (currentTime - this.lastSaveTime > 30000) {
-            saveSystem.saveGame();
-            this.lastSaveTime = currentTime;
         }
     }
 
     // Set up event listeners
     setupEventListeners() {
-        // Save/Load buttons
-        document.getElementById('save-game').addEventListener('click', () => {
-            if (saveSystem.saveGame()) {
-                this.ui.showNotification('Game saved!');
-            }
-        });
-
-        document.getElementById('load-game').addEventListener('click', () => {
-            location.reload();
-        });
-
+        // Export button - download save file
         document.getElementById('export-save').addEventListener('click', () => {
-            saveSystem.exportSave();
-            this.ui.showNotification('Save file exported!');
+            saveSystem.saveGame(); // Prepare the data
+            saveSystem.exportSave(); // Download the file
         });
 
+        // Import button - loads from file
         document.getElementById('import-save').addEventListener('click', () => {
             const input = document.createElement('input');
             input.type = 'file';
@@ -131,7 +108,7 @@ class GameUI {
     // Update the entire UI
     update() {
         this.updateResourceDisplay();
-        this.updateActiveQuests();
+        this.updateQuestProgressBars(); // Update progress bars in real-time
     }
 
     // Update resource displays
@@ -174,8 +151,9 @@ class GameUI {
                 </div>
                 ${quest.running ? `
                     <div class="quest-progress">
-                        <div class="progress-bar" style="width: ${questSystem.getQuestProgress(quest.id)}%"></div>
+                        <div class="progress-bar" id="progress-${quest.id}" style="width: ${questSystem.getQuestProgress(quest.id)}%"></div>
                     </div>
+                    <div class="quest-time">Time left: ${Math.ceil(quest.timeRemainingMs/1000)}s</div>
                 ` : ''}
                 <div class="quest-controls">
                     ${quest.unlocked ? `
@@ -193,30 +171,28 @@ class GameUI {
         `).join('');
     }
 
-    // Update active quests display
-    updateActiveQuests() {
-        const activeQuestsContainer = document.getElementById('active-quests');
-        if (!activeQuestsContainer || typeof questSystem === 'undefined') return;
+    // Update progress bars in real-time
+    updateQuestProgressBars() {
+        if (typeof questSystem === 'undefined') return;
         
-        const activeQuests = questSystem.quests.filter(quest => quest.running);
-        
-        if (activeQuests.length === 0) {
-            activeQuestsContainer.innerHTML = '<p>No active quests. Visit the Quest Board to start one!</p>';
-            return;
-        }
-
-        activeQuestsContainer.innerHTML = activeQuests.map(quest => `
-            <div class="quest active-quest">
-                <div class="quest-header">
-                    <span class="quest-name">${quest.name}</span>
-                    <span class="quest-reward">${questSystem.calculateQuestReward(quest.id)} gold</span>
-                </div>
-                <div class="quest-progress">
-                    <div class="progress-bar" style="width: ${questSystem.getQuestProgress(quest.id)}%"></div>
-                </div>
-                <div class="quest-time">Time left: ${Math.ceil(quest.timeRemainingMs/1000)}s</div>
-            </div>
-        `).join('');
+        questSystem.quests.forEach(quest => {
+            if (quest.running) {
+                const progressBar = document.getElementById(`progress-${quest.id}`);
+                const progress = questSystem.getQuestProgress(quest.id);
+                if (progressBar) {
+                    progressBar.style.width = `${progress}%`;
+                }
+                
+                // Update time display
+                const questElement = document.querySelector(`[data-quest-id="${quest.id}"]`);
+                if (questElement) {
+                    const timeElement = questElement.querySelector('.quest-time');
+                    if (timeElement) {
+                        timeElement.textContent = `Time left: ${Math.ceil(quest.timeRemainingMs/1000)}s`;
+                    }
+                }
+            }
+        });
     }
 
     // Update adventurers list
@@ -321,32 +297,7 @@ class GameUI {
 
     // Show notification
     showNotification(message, type = 'info') {
-        // Simple notification system
         console.log(`[${type.toUpperCase()}] ${message}`);
-        
-        // Create a simple notification
-        const notification = document.createElement('div');
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: ${type === 'error' ? '#e74c3c' : '#2ecc71'};
-            color: white;
-            padding: 15px;
-            border-radius: 5px;
-            z-index: 1000;
-            max-width: 300px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        `;
-        notification.textContent = message;
-        document.body.appendChild(notification);
-        
-        // Remove after 3 seconds
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
-            }
-        }, 3000);
     }
 }
 
@@ -379,7 +330,6 @@ function unlockQuest(questId) {
         game.ui.showNotification(`Unlocked ${quest.name}`);
         game.ui.updateQuestBoard();
         game.ui.updateResourceDisplay();
-        saveSystem.saveGame();
     } else {
         game.ui.showNotification('Not enough gold!', 'error');
     }
@@ -390,7 +340,6 @@ function hireAdventurer(adventurerId) {
         game.ui.showNotification('Adventurer hired!');
         game.ui.updateRecruitmentPool();
         game.ui.updateResourceDisplay();
-        saveSystem.saveGame();
     } else {
         game.ui.showNotification('Not enough gold!', 'error');
     }
@@ -433,9 +382,6 @@ function assignManagerToQuest(adventurerId, questId) {
         game.ui.showNotification(`🤵 ${adventurer.name} is now managing ${quest.name}! Quest started automatically.`);
         game.ui.updateQuestBoard();
         game.ui.updateAdventurersList();
-        
-        // Save the game
-        saveSystem.saveGame();
     }
 }
 
