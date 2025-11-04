@@ -130,6 +130,13 @@ class AdventurerSystem {
     // Assign adventurer to a quest
     assignToQuest(adventurerId, questId) {
         const adventurer = this.adventurers.find(adv => adv.id === adventurerId);
+        
+        // Check if questSystem is available
+        if (typeof questSystem === 'undefined') {
+            console.error('Quest system not available');
+            return false;
+        }
+        
         const quest = questSystem.getQuest(questId);
         
         if (adventurer && quest) {
