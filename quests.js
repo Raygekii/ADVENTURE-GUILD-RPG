@@ -87,24 +87,36 @@ class QuestSystem {
     }
 
     // Complete a quest and give rewards
-    completeQuest(questId) {
-        const quest = this.getQuest(questId);
-        if (quest && quest.running) {
-            quest.running = false;
-            
-            // Calculate reward based on level
-            const reward = this.calculateQuestReward(questId);
-            
-            // Update game state
+completeQuest(questId) {
+    const quest = this.getQuest(questId);
+    if (quest && quest.running) {
+        quest.running = false;
+        
+        // Calculate reward based on level
+        const reward = this.calculateQuestReward(questId);
+        
+        // Update game state
+        if (typeof saveSystem !== 'undefined' && saveSystem.gameState) {
             saveSystem.gameState.gold += reward;
             saveSystem.gameState.totalEarnings += reward;
             saveSystem.gameState.lifetimeEarnings += reward;
-            
-            console.log(`Quest completed! Reward: ${reward} gold`);
-            return reward;
         }
-        return 0;
+        
+        console.log(`Quest completed! Reward: ${reward} gold`);
+        
+        // If manager is hired, automatically restart
+        if (quest.managerHired) {
+            setTimeout(() => {
+                quest.running = true;
+                quest.timeRemainingMs = quest.baseTimeMs;
+                console.log(`Manager automatically restarted ${quest.name}`);
+            }, 100);
+        }
+        
+        return reward;
     }
+    return 0;
+}
 
     // Calculate quest reward
     calculateQuestReward(questId) {
