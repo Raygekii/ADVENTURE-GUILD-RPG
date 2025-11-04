@@ -157,8 +157,8 @@ class GameUI {
                 ` : ''}
                 <div class="quest-controls">
                     ${quest.unlocked ? `
-                        ${!quest.running && !quest.managerHired ? 
-                            `<button onclick="startQuest('${quest.id}')" class="start-btn">Start Quest</button>` : ''}
+                    ${!quest.running && !quest.managerHired ? 
+                        `<button onclick="startQuest('${quest.id}')" class="start-btn">Start Quest</button>` : ''}
                         <button onclick="upgradeQuest('${quest.id}')" class="upgrade">Upgrade (${quest.upgradeCost} gold)</button>
                         ${!quest.managerHired ? 
                             `<button onclick="showManagerAssignment('${quest.id}')" class="hire">Assign Manager</button>` : 
