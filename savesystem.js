@@ -120,21 +120,48 @@ class SaveSystem {
         }
     }
 
-    // Save game - prepare for download but don't auto-download
-saveGame() {
-    try {
-        // Update game state with current data
-        this.gameState.quests = questSystem.quests;
-        this.gameState.adventurers = adventurerSystem.adventurers;
-        this.gameState.timestamp = Date.now();
-        
-        console.log('Game state prepared for saving');
-        return true;
-    } catch (e) {
-        console.error('Failed to save game:', e);
-        return false;
+    // Save game - prepare data for download
+    saveGame() {
+        try {
+            // Update game state with current data
+            this.gameState.quests = questSystem.quests;
+            this.gameState.adventurers = adventurerSystem.adventurers;
+            this.gameState.timestamp = Date.now();
+            
+            console.log('Game state prepared for saving');
+            return true;
+        } catch (e) {
+            console.error('Failed to save game:', e);
+            return false;
+        }
     }
-}
+
+    // Export save as downloadable file
+    exportSave() {
+        try {
+            // First prepare the data
+            this.saveGame();
+            
+            // Create downloadable file
+            const dataStr = JSON.stringify(this.gameState, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            
+            const exportFileDefaultName = `guild_master_save_${Date.now()}.json`;
+            
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+            
+            console.log('Game saved to file!');
+            alert('Save file downloaded! Check your downloads folder.');
+            return true;
+        } catch (e) {
+            console.error('Failed to export game:', e);
+            alert('Failed to download save file!');
+            return false;
+        }
+    }
 
     // Load game from file
     loadGame(file) {
@@ -178,11 +205,6 @@ saveGame() {
         return migrated;
     }
 
-    // Export save as downloadable file (same as saveGame)
-    exportSave() {
-        return this.saveGame();
-    }
-
     // Import save from file
     importSave(event) {
         const file = event.target.files[0];
@@ -196,7 +218,7 @@ saveGame() {
                     game.ui.updateQuestBoard();
                     game.ui.updateAdventurersList();
                     game.ui.updateRecruitmentPool();
-                    game.ui.showNotification('Game loaded successfully!');
+                    alert('Game loaded successfully!');
                 }
             }
         }).catch(error => {
