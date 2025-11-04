@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guild Master RPG</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>🏰 Guild Master RPG</h1>
+            <div class="resources">
+                <div class="resource">
+                    <span class="label">Gold:</span>
+                    <span id="gold">100</span>
+                </div>
+                <div class="resource">
+                    <span class="label">Influence:</span>
+                    <span id="influence">0</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Game Area -->
+        <main class="main-content">
+            <!-- Current Guild Hall -->
+            <section class="guild-hall">
+                <h2 id="current-location">🛖 Starter Shack</h2>
+                <div id="active-quests" class="quests-container">
+                    <!-- Active quests will appear here -->
+                </div>
+            </section>
+
+            <!-- Navigation Tabs -->
+            <nav class="tabs">
+                <button class="tab-button active" data-tab="quests">Quest Board</button>
+                <button class="tab-button" data-tab="adventurers">Adventurers</button>
+                <button class="tab-button" data-tab="recruitment">Recruitment</button>
+                <button class="tab-button" data-tab="expansion">Expansion</button>
+                <button class="tab-button" data-tab="legacy">Legacy</button>
+            </nav>
+
+            <!-- Tab Content -->
+            <div class="tab-content">
+                <div id="quests-tab" class="tab-pane active">
+                    <h3>Available Quests</h3>
+                    <div id="quest-board">
+                        <!-- Quest list will appear here -->
+                    </div>
+                </div>
+
+                <div id="adventurers-tab" class="tab-pane">
+                    <h3>Your Adventurers</h3>
+                    <div id="adventurers-list">
+                        <!-- Adventurers will appear here -->
+                    </div>
+                </div>
+
+                <div id="recruitment-tab" class="tab-pane">
+                    <h3>Recruit Adventurers</h3>
+                    <div id="recruitment-pool">
+                        <!-- Available adventurers for hire -->
+                    </div>
+                </div>
+
+                <div id="expansion-tab" class="tab-pane">
+                    <h3>Guild Expansion</h3>
+                    <div id="locations-list">
+                        <!-- Available locations to unlock -->
+                    </div>
+                </div>
+
+                <div id="legacy-tab" class="tab-pane">
+                    <h3>Guild Legacy</h3>
+                    <div id="prestige-info">
+                        <!-- Prestige system information -->
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Save/Load Buttons -->
+        <footer class="footer">
+            <button id="save-game">💾 Save Game</button>
+            <button id="load-game">📂 Load Game</button>
+            <button id="export-save">📤 Export Save</button>
+            <button id="import-save">📥 Import Save</button>
+        </footer>
+    </div>
+
+    <!-- Scripts -->
+    <script src="savesystem.js"></script>
+    <script src="quests.js"></script>
+    <script src="adventurers.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
