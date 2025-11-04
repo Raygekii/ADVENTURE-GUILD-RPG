@@ -5,18 +5,13 @@ class SaveSystem {
         this.gameState = null;
     }
 
-    // Initialize or load game state
+    // Initialize game state - ALWAYS start fresh
     initializeGame() {
-        const saved = this.loadGame();
-        if (saved) {
-            this.gameState = this.migrateSave(saved);
-            console.log('Game loaded successfully');
-        } else {
-            this.gameState = this.createNewGame();
-            console.log('New game started');
-        }
+        // Don't load from localStorage anymore
+        this.gameState = this.createNewGame();
+        console.log('New game started');
         
-        // Initialize quest system with saved data
+        // Initialize quest system with fresh data
         this.initializeQuestsFromSave();
         
         return this.gameState;
@@ -49,31 +44,11 @@ class SaveSystem {
             },
             
             offlineEarnings: {
-                enabled: true,
-                maxDuration: 86400000, // 24 hours in ms
+                enabled: false, // Disable offline earnings since we're not auto-saving
+                maxDuration: 86400000,
                 rate: 0.5
             }
         };
-    }
-
-    // Migrate old save data to new format
-    migrateSave(saved) {
-        // Ensure all required fields exist
-        const migrated = { ...this.createNewGame(), ...saved };
-        
-        // Migrate quest data
-        if (saved.quests && saved.quests.length > 0) {
-            migrated.quests = saved.quests;
-        } else {
-            migrated.quests = this.getDefaultQuestData();
-        }
-        
-        // Migrate adventurers
-        if (!saved.adventurers) {
-            migrated.adventurers = [];
-        }
-        
-        return migrated;
     }
 
     // Get default quest data
@@ -140,53 +115,72 @@ class SaveSystem {
     initializeQuestsFromSave() {
         if (this.gameState.quests && this.gameState.quests.length > 0) {
             questSystem.quests = this.gameState.quests;
+        } else {
+            questSystem.quests = this.getDefaultQuestData();
         }
     }
 
-    // Save game to localStorage
-    saveGame() {
-        try {
-            // Update game state with current quest data
-            this.gameState.quests = questSystem.quests;
-            this.gameState.adventurers = adventurerSystem.adventurers;
-            this.gameState.timestamp = Date.now();
-            
-            localStorage.setItem(this.saveKey, JSON.stringify(this.gameState));
-            console.log('Game saved successfully');
-            return true;
-        } catch (e) {
-            console.error('Failed to save game:', e);
-            return false;
-        }
+    // Save game - prepare for download but don't auto-download
+saveGame() {
+    try {
+        // Update game state with current data
+        this.gameState.quests = questSystem.quests;
+        this.gameState.adventurers = adventurerSystem.adventurers;
+        this.gameState.timestamp = Date.now();
+        
+        console.log('Game state prepared for saving');
+        return true;
+    } catch (e) {
+        console.error('Failed to save game:', e);
+        return false;
+    }
+}
+
+    // Load game from file
+    loadGame(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const importedSave = JSON.parse(e.target.result);
+                    this.gameState = this.migrateSave(importedSave);
+                    
+                    // Update game systems with loaded data
+                    questSystem.quests = this.gameState.quests || this.getDefaultQuestData();
+                    adventurerSystem.adventurers = this.gameState.adventurers || [];
+                    
+                    console.log('Game loaded successfully');
+                    resolve(true);
+                } catch (error) {
+                    console.error('Invalid save file:', error);
+                    reject('Invalid save file!');
+                }
+            };
+            reader.readAsText(file);
+        });
     }
 
-    // Load game from localStorage
-    loadGame() {
-        try {
-            const saved = localStorage.getItem(this.saveKey);
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                console.log('Game loaded from storage');
-                return parsed;
-            }
-        } catch (e) {
-            console.error('Failed to load game:', e);
+    // Migrate save data if needed
+    migrateSave(saved) {
+        // Ensure all required fields exist
+        const migrated = { ...this.createNewGame(), ...saved };
+        
+        // Ensure quests exist
+        if (!migrated.quests || migrated.quests.length === 0) {
+            migrated.quests = this.getDefaultQuestData();
         }
-        return null;
+        
+        // Ensure adventurers exist
+        if (!migrated.adventurers) {
+            migrated.adventurers = [];
+        }
+        
+        return migrated;
     }
 
-    // Export save as downloadable file
+    // Export save as downloadable file (same as saveGame)
     exportSave() {
-        this.saveGame(); // Save current state first
-        const dataStr = JSON.stringify(this.gameState, null, 2);
-        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-        
-        const exportFileDefaultName = `guild_master_save_${Date.now()}.json`;
-        
-        const linkElement = document.createElement('a');
-        linkElement.setAttribute('href', dataUri);
-        linkElement.setAttribute('download', exportFileDefaultName);
-        linkElement.click();
+        return this.saveGame();
     }
 
     // Import save from file
@@ -194,57 +188,28 @@ class SaveSystem {
         const file = event.target.files[0];
         if (!file) return;
 
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const importedSave = JSON.parse(e.target.result);
-                this.gameState = this.migrateSave(importedSave);
-                this.saveGame();
-                console.log('Game imported successfully');
-                location.reload(); // Refresh to apply new save
-            } catch (error) {
-                console.error('Invalid save file:', error);
-                alert('Invalid save file!');
+        this.loadGame(file).then(success => {
+            if (success) {
+                // Refresh the UI to show loaded data
+                if (game && game.ui) {
+                    game.ui.updateResourceDisplay();
+                    game.ui.updateQuestBoard();
+                    game.ui.updateAdventurersList();
+                    game.ui.updateRecruitmentPool();
+                    game.ui.showNotification('Game loaded successfully!');
+                }
             }
-        };
-        reader.readAsText(file);
-    }
-
-    // Calculate offline earnings
-    calculateOfflineEarnings() {
-        if (!this.gameState.offlineEarnings.enabled) return 0;
-
-        const now = Date.now();
-        const lastPlayed = this.gameState.timestamp;
-        const offlineTime = Math.min(now - lastPlayed, this.gameState.offlineEarnings.maxDuration);
-        
-        if (offlineTime < 30000) return 0; // Less than 30 seconds, no earnings
-
-        // Calculate earnings based on managed quests
-        let totalEarnings = 0;
-        questSystem.quests.forEach(quest => {
-            if (quest.managerHired && quest.running) {
-                const questEarnings = questSystem.calculateQuestReward(quest.id);
-                const completions = Math.floor(offlineTime / quest.baseTimeMs);
-                totalEarnings += completions * questEarnings;
-            }
+        }).catch(error => {
+            alert(error);
         });
-
-        // Add base offline earnings
-        const baseEarnings = offlineTime * this.gameState.offlineEarnings.rate / 1000;
-        return Math.floor(totalEarnings + baseEarnings);
     }
 
-    // Apply offline earnings
+    // Remove offline earnings since we're not auto-saving
+    calculateOfflineEarnings() {
+        return 0;
+    }
+
     applyOfflineEarnings() {
-        const earnings = this.calculateOfflineEarnings();
-        if (earnings > 0) {
-            this.gameState.gold += earnings;
-            this.gameState.totalEarnings += earnings;
-            this.gameState.lifetimeEarnings += earnings;
-            console.log(`Offline earnings: ${earnings} gold`);
-            return earnings;
-        }
         return 0;
     }
 }
