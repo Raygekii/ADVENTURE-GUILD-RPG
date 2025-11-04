@@ -9,12 +9,16 @@ class SaveSystem {
     initializeGame() {
         const saved = this.loadGame();
         if (saved) {
-            this.gameState = saved;
+            this.gameState = this.migrateSave(saved);
             console.log('Game loaded successfully');
         } else {
             this.gameState = this.createNewGame();
             console.log('New game started');
         }
+        
+        // Initialize quest system with saved data
+        this.initializeQuestsFromSave();
+        
         return this.gameState;
     }
 
@@ -52,10 +56,101 @@ class SaveSystem {
         };
     }
 
+    // Migrate old save data to new format
+    migrateSave(saved) {
+        // Ensure all required fields exist
+        const migrated = { ...this.createNewGame(), ...saved };
+        
+        // Migrate quest data
+        if (saved.quests && saved.quests.length > 0) {
+            migrated.quests = saved.quests;
+        } else {
+            migrated.quests = this.getDefaultQuestData();
+        }
+        
+        // Migrate adventurers
+        if (!saved.adventurers) {
+            migrated.adventurers = [];
+        }
+        
+        return migrated;
+    }
+
+    // Get default quest data
+    getDefaultQuestData() {
+        return [
+            {
+                id: "goblin_patrol",
+                name: "Goblin Patrol",
+                locationId: "starter_shack",
+                description: "Clear goblins from the forest path",
+                baseGoldReward: 25,
+                level: 0,
+                upgradeCost: 35,
+                goldPerUpgrade: 2,
+                baseTimeMs: 8000,
+                running: false,
+                timeRemainingMs: 0,
+                managerHired: false,
+                managerId: null,
+                costGrowth: 1.35,
+                unlocked: true,
+                unlockCost: 0
+            },
+            {
+                id: "herb_collection",
+                name: "Herb Collection",
+                locationId: "starter_shack", 
+                description: "Gather medicinal herbs for the town healer",
+                baseGoldReward: 15,
+                level: 0,
+                upgradeCost: 25,
+                goldPerUpgrade: 1.5,
+                baseTimeMs: 5000,
+                running: false,
+                timeRemainingMs: 0,
+                managerHired: false,
+                managerId: null,
+                costGrowth: 1.3,
+                unlocked: true,
+                unlockCost: 50
+            },
+            {
+                id: "rat_extermination",
+                name: "Rat Extermination", 
+                locationId: "starter_shack",
+                description: "Clear rats from the town cellar",
+                baseGoldReward: 10,
+                level: 0,
+                upgradeCost: 20,
+                goldPerUpgrade: 1,
+                baseTimeMs: 4000,
+                running: false,
+                timeRemainingMs: 0,
+                managerHired: false,
+                managerId: null,
+                costGrowth: 1.25,
+                unlocked: false,
+                unlockCost: 30
+            }
+        ];
+    }
+
+    // Initialize quest system with saved data
+    initializeQuestsFromSave() {
+        if (this.gameState.quests && this.gameState.quests.length > 0) {
+            questSystem.quests = this.gameState.quests;
+        }
+    }
+
     // Save game to localStorage
     saveGame() {
-        this.gameState.timestamp = Date.now();
         try {
+            // Update game state with current quest data
+            this.gameState.quests = questSystem.quests;
+            this.gameState.adventurers = adventurerSystem.adventurers;
+            this.gameState.timestamp = Date.now();
+            
             localStorage.setItem(this.saveKey, JSON.stringify(this.gameState));
             console.log('Game saved successfully');
             return true;
@@ -82,6 +177,7 @@ class SaveSystem {
 
     // Export save as downloadable file
     exportSave() {
+        this.saveGame(); // Save current state first
         const dataStr = JSON.stringify(this.gameState, null, 2);
         const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
         
@@ -102,7 +198,7 @@ class SaveSystem {
         reader.onload = (e) => {
             try {
                 const importedSave = JSON.parse(e.target.result);
-                this.gameState = importedSave;
+                this.gameState = this.migrateSave(importedSave);
                 this.saveGame();
                 console.log('Game imported successfully');
                 location.reload(); // Refresh to apply new save
@@ -124,9 +220,19 @@ class SaveSystem {
         
         if (offlineTime < 30000) return 0; // Less than 30 seconds, no earnings
 
-        // Simple offline earnings calculation
-        const earnings = offlineTime * this.gameState.offlineEarnings.rate / 1000;
-        return Math.floor(earnings);
+        // Calculate earnings based on managed quests
+        let totalEarnings = 0;
+        questSystem.quests.forEach(quest => {
+            if (quest.managerHired && quest.running) {
+                const questEarnings = questSystem.calculateQuestReward(quest.id);
+                const completions = Math.floor(offlineTime / quest.baseTimeMs);
+                totalEarnings += completions * questEarnings;
+            }
+        });
+
+        // Add base offline earnings
+        const baseEarnings = offlineTime * this.gameState.offlineEarnings.rate / 1000;
+        return Math.floor(totalEarnings + baseEarnings);
     }
 
     // Apply offline earnings
