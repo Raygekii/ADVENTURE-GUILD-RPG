@@ -3,6 +3,7 @@ class GameEngine {
     constructor() {
         this.isRunning = false;
         this.lastUpdateTime = 0;
+        this.lastSaveTime = 0;
         this.gameState = null;
         this.ui = new GameUI();
     }
@@ -36,6 +37,7 @@ class GameEngine {
     startGameLoop() {
         this.isRunning = true;
         this.lastUpdateTime = Date.now();
+        this.lastSaveTime = Date.now();
         this.gameLoop();
     }
 
@@ -47,7 +49,7 @@ class GameEngine {
         const deltaTime = currentTime - this.lastUpdateTime;
         
         // Update game systems
-        this.update(deltaTime);
+        this.update(deltaTime, currentTime);
         
         // Update UI
         this.ui.update();
@@ -59,12 +61,14 @@ class GameEngine {
     }
 
     // Update game state
-    update(deltaTime) {
+    update(deltaTime, currentTime) {
         // Apply time scaling
-        const scaledDeltaTime = deltaTime * this.gameState.time.timeScale;
+        const scaledDeltaTime = deltaTime * (this.gameState?.time?.timeScale || 1);
         
         // Update quest timers
-        questSystem.updateQuestTimers(scaledDeltaTime);
+        if (typeof questSystem !== 'undefined') {
+            questSystem.updateQuestTimers(scaledDeltaTime);
+        }
         
         // Auto-save every 30 seconds
         if (currentTime - this.lastSaveTime > 30000) {
@@ -133,6 +137,8 @@ class GameUI {
     // Update resource displays
     updateResourceDisplay() {
         const gameState = saveSystem.gameState;
+        if (!gameState) return;
+        
         document.getElementById('gold').textContent = Math.floor(gameState.gold);
         document.getElementById('influence').textContent = gameState.influence;
         document.getElementById('current-location').textContent = this.getLocationDisplayName(gameState.currentLocation);
@@ -151,6 +157,8 @@ class GameUI {
     // Update the quest board
     updateQuestBoard() {
         const questBoard = document.getElementById('quest-board');
+        if (!questBoard || typeof questSystem === 'undefined') return;
+        
         const quests = questSystem.quests;
         
         questBoard.innerHTML = quests.map(quest => `
@@ -172,13 +180,13 @@ class GameUI {
                 <div class="quest-controls">
                     ${quest.unlocked ? `
                         ${!quest.running && !quest.managerHired ? 
-                            `<button onclick="game.startQuest('${quest.id}')" class="start-btn">Start Quest</button>` : ''}
-                        <button onclick="game.upgradeQuest('${quest.id}')" class="upgrade">Upgrade (${quest.upgradeCost} gold)</button>
+                            `<button onclick="startQuest('${quest.id}')" class="start-btn">Start Quest</button>` : ''}
+                        <button onclick="upgradeQuest('${quest.id}')" class="upgrade">Upgrade (${quest.upgradeCost} gold)</button>
                         ${!quest.managerHired ? 
-                            `<button onclick="game.ui.showManagerAssignment('${quest.id}')" class="hire">Assign Manager</button>` : 
+                            `<button onclick="showManagerAssignment('${quest.id}')" class="hire">Assign Manager</button>` : 
                             `<span>🤵 Managed</span>`}
                     ` : `
-                        <button onclick="game.unlockQuest('${quest.id}')" class="upgrade">Unlock (${quest.unlockCost} gold)</button>
+                        <button onclick="unlockQuest('${quest.id}')" class="upgrade">Unlock (${quest.unlockCost} gold)</button>
                     `}
                 </div>
             </div>
@@ -188,6 +196,8 @@ class GameUI {
     // Update active quests display
     updateActiveQuests() {
         const activeQuestsContainer = document.getElementById('active-quests');
+        if (!activeQuestsContainer || typeof questSystem === 'undefined') return;
+        
         const activeQuests = questSystem.quests.filter(quest => quest.running);
         
         if (activeQuests.length === 0) {
@@ -212,6 +222,8 @@ class GameUI {
     // Update adventurers list
     updateAdventurersList() {
         const adventurersList = document.getElementById('adventurers-list');
+        if (!adventurersList || typeof adventurerSystem === 'undefined') return;
+        
         const adventurers = adventurerSystem.adventurers;
         
         if (adventurers.length === 0) {
@@ -230,15 +242,15 @@ class GameUI {
                 </div>
                 <div class="adventurer-assignment">
                     ${adv.assignedQuestId ? 
-                        `Assigned to: ${questSystem.getQuest(adv.assignedQuestId)?.name || 'Unknown Quest'}` : 
+                        `Assigned to: ${questSystem?.getQuest(adv.assignedQuestId)?.name || 'Unknown Quest'}` : 
                         'Unassigned'}
                 </div>
                 <div class="adventurer-social">
                     Affection: ${adv.social.affection} | Loyalty: ${adv.social.loyalty}
                 </div>
                 <div class="adventurer-controls">
-                    <button onclick="game.ui.showAssignmentModal('${adv.id}')">Assign Quest</button>
-                    <button onclick="game.ui.showGiftModal('${adv.id}')">Give Gift</button>
+                    <button onclick="showAssignmentModal('${adv.id}')">Assign Quest</button>
+                    <button onclick="showGiftModal('${adv.id}')">Give Gift</button>
                 </div>
             </div>
         `).join('');
@@ -247,6 +259,8 @@ class GameUI {
     // Update recruitment pool
     updateRecruitmentPool() {
         const recruitmentPool = document.getElementById('recruitment-pool');
+        if (!recruitmentPool || typeof adventurerSystem === 'undefined') return;
+        
         const pool = adventurerSystem.recruitmentPool;
         
         recruitmentPool.innerHTML = pool.map(adv => `
@@ -263,7 +277,7 @@ class GameUI {
                     Traits: ${adv.personalityTraits.join(', ')}
                 </div>
                 <div class="adventurer-controls">
-                    <button onclick="game.hireAdventurer('${adv.id}')" class="hire">
+                    <button onclick="hireAdventurer('${adv.id}')" class="hire">
                         Hire (${adv.hireCost} gold)
                     </button>
                 </div>
@@ -296,46 +310,58 @@ class GameUI {
             case 'recruitment':
                 this.updateRecruitmentPool();
                 break;
+            case 'expansion':
+                document.getElementById('locations-list').innerHTML = '<p>Expansion content coming soon!</p>';
+                break;
+            case 'legacy':
+                document.getElementById('prestige-info').innerHTML = '<p>Legacy content coming soon!</p>';
+                break;
         }
     }
 
     // Show notification
     showNotification(message, type = 'info') {
-        // Simple notification system - you can enhance this later
+        // Simple notification system
         console.log(`[${type.toUpperCase()}] ${message}`);
-        alert(message); // Temporary - replace with better UI later
-    }
-
-    // Show manager assignment modal (simplified)
-    showManagerAssignment(questId) {
-        const availableAdventurers = adventurerSystem.adventurers.filter(adv => !adv.assignedQuestId);
         
-        if (availableAdventurers.length === 0) {
-            this.showNotification('No available adventurers to assign!');
-            return;
-        }
-
-        const adventurer = availableAdventurers[0]; // Simple assignment for now
-        if (adventurerSystem.assignToQuest(adventurer.id, questId)) {
-            this.showNotification(`Assigned ${adventurer.name} to manage ${questSystem.getQuest(questId).name}`);
-            this.updateQuestBoard();
-            this.updateAdventurersList();
-        }
+        // Create a simple notification
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: ${type === 'error' ? '#e74c3c' : '#2ecc71'};
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            z-index: 1000;
+            max-width: 300px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        `;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 3000);
     }
 }
 
-// Game instance and global functions
+// Game instance
 const game = new GameEngine();
 
 // Global functions for HTML onclick events
-window.startQuest = (questId) => {
+function startQuest(questId) {
     if (questSystem.startQuest(questId)) {
         game.ui.showNotification(`Started ${questSystem.getQuest(questId).name}`);
         game.ui.updateQuestBoard();
     }
-};
+}
 
-window.upgradeQuest = (questId) => {
+function upgradeQuest(questId) {
     if (questSystem.upgradeQuest(questId)) {
         game.ui.showNotification(`Upgraded ${questSystem.getQuest(questId).name}`);
         game.ui.updateQuestBoard();
@@ -343,9 +369,9 @@ window.upgradeQuest = (questId) => {
     } else {
         game.ui.showNotification('Not enough gold!', 'error');
     }
-};
+}
 
-window.unlockQuest = (questId) => {
+function unlockQuest(questId) {
     const quest = questSystem.getQuest(questId);
     if (saveSystem.gameState.gold >= quest.unlockCost) {
         saveSystem.gameState.gold -= quest.unlockCost;
@@ -357,9 +383,9 @@ window.unlockQuest = (questId) => {
     } else {
         game.ui.showNotification('Not enough gold!', 'error');
     }
-};
+}
 
-window.hireAdventurer = (adventurerId) => {
+function hireAdventurer(adventurerId) {
     if (adventurerSystem.hireAdventurer(adventurerId)) {
         game.ui.showNotification('Adventurer hired!');
         game.ui.updateRecruitmentPool();
@@ -368,7 +394,31 @@ window.hireAdventurer = (adventurerId) => {
     } else {
         game.ui.showNotification('Not enough gold!', 'error');
     }
-};
+}
+
+function showManagerAssignment(questId) {
+    const availableAdventurers = adventurerSystem.adventurers.filter(adv => !adv.assignedQuestId);
+    
+    if (availableAdventurers.length === 0) {
+        game.ui.showNotification('No available adventurers to assign!');
+        return;
+    }
+
+    const adventurer = availableAdventurers[0];
+    if (adventurerSystem.assignToQuest(adventurer.id, questId)) {
+        game.ui.showNotification(`Assigned ${adventurer.name} to manage ${questSystem.getQuest(questId).name}`);
+        game.ui.updateQuestBoard();
+        game.ui.updateAdventurersList();
+    }
+}
+
+function showAssignmentModal(adventurerId) {
+    game.ui.showNotification('Assignment feature coming soon!');
+}
+
+function showGiftModal(adventurerId) {
+    game.ui.showNotification('Gift feature coming soon!');
+}
 
 // Initialize game when page loads
 document.addEventListener('DOMContentLoaded', () => {
